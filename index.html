@@ -1,16 +1,9 @@
-import java.io.BufferedWriter;
-import java.io.FileWriter;
-import java.io.IOException;
 
-public class FaultSimulation3DGeneratorV11 {
-    public static void main(String[] args) {
-        String fileName = "fault_simulation_3d_v11.html";
-        String htmlContent = """
             <!DOCTYPE html>
             <html lang="ja">
             <head>
                 <meta charset="UTF-8">
-                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
                 <title>3D断層形成シミュレーター v11</title>
                 <style>
                     body {
@@ -38,6 +31,7 @@ public class FaultSimulation3DGeneratorV11 {
                         backdrop-filter: blur(10px);
                         border: 1px solid rgba(255,255,255,0.1);
                         z-index: 10;
+                        box-sizing: border-box;
                     }
                     h1 {
                         font-size: 18px;
@@ -101,16 +95,6 @@ public class FaultSimulation3DGeneratorV11 {
                         margin: 10px 0;
                         cursor: pointer;
                     }
-                    .info-box {
-                        font-size: 12px;
-                        line-height: 1.6;
-                        color: #c8d6e5;
-                        background: #353b48;
-                        padding: 12px;
-                        border-radius: 8px;
-                        border-left: 4px solid #00d2d3;
-                        margin-top: 15px;
-                    }
                     .legend {
                         font-size: 11px;
                         margin-top: 10px;
@@ -122,13 +106,21 @@ public class FaultSimulation3DGeneratorV11 {
                     .legend-item {
                         display: flex;
                         align-items: center;
-                        margin-bottom: 4px;
+                        margin-bottom: 6px;
                     }
                     .legend-color {
-                        width: 12px;
+                        width: 16px;
                         height: 12px;
-                        margin-right: 6px;
+                        margin-right: 8px;
                         border-radius: 2px;
+                        display: inline-block;
+                    }
+                    .legend-color.primary {
+                        background: #ff3838;
+                    }
+                    .legend-color.secondary {
+                        background: repeating-linear-gradient(90deg, #54a0ff, #54a0ff 3px, transparent 3px, transparent 6px);
+                        border: 1px solid #54a0ff;
                     }
                     .navigation-hint {
                         position: absolute;
@@ -143,6 +135,56 @@ public class FaultSimulation3DGeneratorV11 {
                         pointer-events: none;
                         z-index: 10;
                     }
+
+                    /* スマホ・タブレット用レスポンシブ（画面の%・vh/vw単位で調整） */
+                    @media (max-width: 600px) {
+                        .ui-panel {
+                            top: 10px;
+                            left: 50%;
+                            transform: translateX(-50%);
+                            width: 85vw;
+                            max-height: 42vh;
+                            overflow-y: auto;
+                            padding: 3vw;
+                            border-radius: 12px;
+                        }
+                        h1 {
+                            font-size: 4vw;
+                            margin-bottom: 8px;
+                            padding-bottom: 4px;
+                        }
+                        .control-group {
+                            margin-bottom: 10px;
+                        }
+                        label {
+                            font-size: 3vw;
+                            margin-bottom: 4px;
+                        }
+                        select, button {
+                            padding: 8px 10px;
+                            font-size: 3.2vw;
+                            margin-bottom: 6px;
+                            border-radius: 6px;
+                        }
+                        .slider-container {
+                            padding: 8px;
+                            margin-top: 4px;
+                        }
+                        input[type="range"] {
+                            margin: 4px 0;
+                        }
+                        .legend {
+                            font-size: 2.8vw;
+                            padding: 6px;
+                            margin-top: 6px;
+                        }
+                        .navigation-hint {
+                            bottom: 10px;
+                            font-size: 2.8vw;
+                            padding: 6px 14px;
+                            white-space: nowrap;
+                        }
+                    }
                 </style>
                 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
                 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
@@ -153,40 +195,35 @@ public class FaultSimulation3DGeneratorV11 {
                     <h1>3D 断層形成シミュレーター</h1>
                     
                     <div class="control-group">
-                        <label for="faultType">1. 断層の種類と応力（応力軸の設定）</label>
+                        <label for="faultType">1. 断層の種類</label>
                         <select id="faultType" onchange="initSimulationState()">
-                            <option value="normal">正断層 (上盤がずり下がる)</option>
-                            <option value="reverse">逆断層 (上盤がのし上がる)</option>
-                            <option value="strike-slip">左横ずれ断層 (水平スライド)</option>
+                            <option value="normal">正断層 </option>
+                            <option value="reverse">逆断層</option>
+                            <option value="strike-slip">左横ずれ断層 </option>
                         </select>
                     </div>
 
                     <div class="control-group">
-                        <label>2. 応力を加えていく（手動操作）</label>
+                        <label>2. 応力を加えていく</label>
                         <div class="slider-container">
                             <span style="font-size:11px; float:left; color:#8395a7;">応力ゼロ</span>
-                            <span style="font-size:11px; float:right; color:#8395a7;">破壊・変位</span>
+                            <span style="font-size:11px; float:right; color:#8395a7;"></span>
                             <input type="range" id="forceSlider" min="0" max="100" value="0" oninput="onSliderChange(this.value)">
                         </div>
                     </div>
 
                     <div class="control-group">
-                        <button class="action-btn" onclick="playAnimation()">応力を加え続ける (自動)</button>
                         <button class="reset-btn" onclick="resetSimulation()">初期状態に戻す</button>
-                    </div>
-
-                    <div class="info-box" id="infoText">
-                        変形前の均質な地層です。始まりの力（赤矢印）のみが働いています。
                     </div>
 
                     <div class="legend">
                         <div class="legend-item">
-                            <div class="legend-color" style="background: #ff3838;"></div>
-                            <span>始まりの力（主要原因となる応力）</span>
+                            <div class="legend-color primary"></div>
+                            <span>主応力（加わる力）</span>
                         </div>
                         <div class="legend-item">
-                            <div class="legend-color" style="background: #54a0ff;"></div>
-                            <span>変形・破壊に伴い生じる力（変形後表示）</span>
+                            <div class="legend-color secondary"></div>
+                            <span>変形・変位方向（結果）</span>
                         </div>
                     </div>
                 </div>
@@ -205,12 +242,6 @@ public class FaultSimulation3DGeneratorV11 {
                     
                     let animationProgress = 0;
                     let isAnimating = false;
-                    const explanations = {
-                        initial: "変形前の均質な地層です。地殻を歪ませる『始まりの力（赤矢印）』がかかっています。",
-                        normal: "【正断層】水平引張力（赤）を受けて変形し、結果として右ブロックが鉛直下向きに沈降、左ブロックが相対的に上向きへとずれます。",
-                        reverse: "【逆断層】水平圧縮力（赤）を受けて変形し、結果として右ブロックが鉛直上向きに隆起、左ブロックが相対的に下向きへと逃げます。",
-                        'strike-slip': "【左横ずれ断層】長辺方向からの圧縮力（赤）に対し、約45°をなす破断面が形成。結果として短辺方向（青）へ引っ張られるようにスライド逃げします。"
-                    };
 
                     function init3D() {
                         const container = document.getElementById('canvas-container');
@@ -222,6 +253,7 @@ public class FaultSimulation3DGeneratorV11 {
 
                         renderer = new THREE.WebGLRenderer({ antialias: true });
                         renderer.setSize(window.innerWidth, window.innerHeight);
+                        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
                         container.appendChild(renderer.domElement);
 
                         controls = new THREE.OrbitControls(camera, renderer.domElement);
@@ -254,8 +286,8 @@ public class FaultSimulation3DGeneratorV11 {
                         const layerColors = [0xffffff, 0x5c4033, 0xffffff];
                         const layerHeight = 1.3;
                         const depth = 5.0;
-                        const slantZOffset = (type === 'strike-slip') ? 0.8 : 0.0;
                         
+                        // 横ずれ断層のときは面をまっすぐ（垂直）に接合させてスキマを無くす
                         const topX = (type === 'strike-slip') ? 0.0 : 0.5;
                         const botX = (type === 'strike-slip') ? 0.0 : -1.8;
 
@@ -280,26 +312,21 @@ public class FaultSimulation3DGeneratorV11 {
                             const zFront = depth / 2;
                             const zBack = -depth / 2;
 
-                            const xTopF = xTopSplit + slantZOffset;
-                            const xBotF = xBotSplit + slantZOffset;
-                            const xTopB = xTopSplit - slantZOffset;
-                            const xBotB = xBotSplit - slantZOffset;
-
                             // 左側ブロック
                             const leftGeom = new THREE.BufferGeometry();
                             const vertices = new Float32Array([
-                                -4, yTop, zFront,   xTopF, yTop, zFront,   xBotF, yBot, zFront,
-                                -4, yTop, zFront,   xBotF, yBot, zFront,   -4, yBot, zFront,
-                                -4, yTop, zBack,    xBotB, yBot, zBack,    xTopB, yTop, zBack,
-                                -4, yTop, zBack,    -4, yBot, zBack,       xBotB, yBot, zBack,
-                                -4, yTop, zFront,   -4, yTop, zBack,       xTopB, yTop, zBack,
-                                -4, yTop, zFront,   xTopB, yTop, zBack,    xTopF, yTop, zFront,
-                                -4, yBot, zFront,   xBotB, yBot, zBack,    -4, yBot, zBack,
-                                -4, yBot, zFront,   xBotF, yBot, zFront,   xBotB, yBot, zBack,
+                                -4, yTop, zFront,   xTopSplit, yTop, zFront,   xBotSplit, yBot, zFront,
+                                -4, yTop, zFront,   xBotSplit, yBot, zFront,   -4, yBot, zFront,
+                                -4, yTop, zBack,    xBotSplit, yBot, zBack,    xTopSplit, yTop, zBack,
+                                -4, yTop, zBack,    -4, yBot, zBack,       xBotSplit, yBot, zBack,
+                                -4, yTop, zFront,   -4, yTop, zBack,       xTopSplit, yTop, zBack,
+                                -4, yTop, zFront,   xTopSplit, yTop, zBack,    xTopSplit, yTop, zFront,
+                                -4, yBot, zFront,   xBotSplit, yBot, zBack,    -4, yBot, zBack,
+                                -4, yBot, zFront,   xBotSplit, yBot, zFront,   xBotSplit, yBot, zBack,
                                 -4, yTop, zFront,   -4, yBot, zBack,       -4, yTop, zBack,
                                 -4, yTop, zFront,   -4, yBot, zFront,      -4, yBot, zBack,
-                                xTopF, yTop, zFront, xTopB, yTop, zBack,   xBotB, yBot, zBack,
-                                xTopF, yTop, zFront, xBotB, yBot, zBack,   xBotF, yBot, zFront
+                                xTopSplit, yTop, zFront, xTopSplit, yTop, zBack,   xBotSplit, yBot, zBack,
+                                xTopSplit, yTop, zFront, xBotSplit, yBot, zBack,   xBotSplit, yBot, zFront
                             ]);
                             leftGeom.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
                             leftGeom.computeVertexNormals();
@@ -309,18 +336,18 @@ public class FaultSimulation3DGeneratorV11 {
                             // 右側ブロック
                             const rightGeom = new THREE.BufferGeometry();
                             const rVertices = new Float32Array([
-                                xTopF, yTop, zFront,   4, yTop, zFront,   4, yBot, zFront,
-                                xTopF, yTop, zFront,   4, yBot, zFront,   xBotF, yBot, zFront,
-                                xTopB, yTop, zBack,    4, yBot, zBack,    4, yTop, zBack,
-                                xTopB, yTop, zBack,    xBotB, yBot, zBack, 4, yBot, zBack,
-                                xTopF, yTop, zFront,   xTopB, yTop, zBack, 4, yTop, zBack,
-                                xTopF, yTop, zFront,   4, yTop, zBack,    4, yTop, zFront,
-                                xBotF, yBot, zFront,   4, yBot, zBack,    xBotB, yBot, zBack,
-                                xBotF, yBot, zFront,   4, yBot, zFront,   4, yBot, zBack,
+                                xTopSplit, yTop, zFront,   4, yTop, zFront,   4, yBot, zFront,
+                                xTopSplit, yTop, zFront,   4, yBot, zFront,   xBotSplit, yBot, zFront,
+                                xTopSplit, yTop, zBack,    4, yBot, zBack,    4, yTop, zBack,
+                                xTopSplit, yTop, zBack,    xBotSplit, yBot, zBack, 4, yBot, zBack,
+                                xTopSplit, yTop, zFront,   xTopSplit, yTop, zBack, 4, yTop, zBack,
+                                xTopSplit, yTop, zFront,   4, yTop, zBack,    4, yTop, zFront,
+                                xBotSplit, yBot, zFront,   4, yBot, zBack,    xBotSplit, yBot, zBack,
+                                xBotSplit, yBot, zFront,   4, yBot, zFront,   4, yBot, zBack,
                                 4, yTop, zFront,       4, yTop, zBack,    4, yBot, zBack,
                                 4, yTop, zFront,       4, yBot, zBack,    4, yBot, zFront,
-                                xTopF, yTop, zFront,   xBotB, yBot, zBack, xTopB, yTop, zBack,
-                                xTopF, yTop, zFront,   xBotF, yBot, zFront, xBotB, yBot, zBack
+                                xTopSplit, yTop, zFront,   xBotSplit, yBot, zBack, xTopSplit, yTop, zBack,
+                                xTopSplit, yTop, zFront,   xBotSplit, yBot, zFront, xBotSplit, yBot, zBack
                             ]);
                             rightGeom.setAttribute('position', new THREE.BufferAttribute(rVertices, 3));
                             rightGeom.computeVertexNormals();
@@ -339,11 +366,10 @@ public class FaultSimulation3DGeneratorV11 {
                         }
 
                         const type = document.getElementById('faultType').value;
-                        const primaryColor = 0xff3838;   // 始まりの力：赤
-                        const secondaryColor = 0x54a0ff; // 二次的な力：青
+                        const primaryColor = 0xff3838;   // 主応力（赤）
+                        const secondaryColor = 0x54a0ff; // 変形・変位（青）
 
                         if (type === 'normal') {
-                            // 【正断層】
                             addArrow(new THREE.Vector3(-5.2, 0, 0), new THREE.Vector3(-1, 0, 0), 1.8, primaryColor, 'left', true);
                             addArrow(new THREE.Vector3(5.2, 0, 0), new THREE.Vector3(1, 0, 0), 1.8, primaryColor, 'right', true);
 
@@ -351,53 +377,77 @@ public class FaultSimulation3DGeneratorV11 {
                             addArrow(new THREE.Vector3(2.2, -3.7, 0), new THREE.Vector3(0, 1, 0), 1.8, secondaryColor, 'right', false);
 
                         } else if (type === 'reverse') {
-                            // 【逆断層】
                             addArrow(new THREE.Vector3(-5.5, 0, 0), new THREE.Vector3(1, 0, 0), 1.8, primaryColor, 'left', true);
                             addArrow(new THREE.Vector3(5.5, 0, 0), new THREE.Vector3(-1, 0, 0), 1.8, primaryColor, 'right', true);
 
                             addArrow(new THREE.Vector3(-2.2, 2.0, 0), new THREE.Vector3(0, 1, 0), 1.8, secondaryColor, 'left', false);
-                            addArrow(new THREE.Vector3(2.2, -1.9, 0), new THREE.Vector3(0, -1, 0), 1.8, secondaryColor, 'right', false);
+                            addArrow(new THREE.Vector3(2.2, -2.0, 0), new THREE.Vector3(0, -1, 0), 1.8, secondaryColor, 'right', false);
 
                         } else if (type === 'strike-slip') {
-                            // 【左横ずれ断層】
-                            // 赤（始まりの力）：長辺方向（左右）から押す圧縮力（最大主応力）
                             addArrow(new THREE.Vector3(-5.5, 0, 0), new THREE.Vector3(1, 0, 0), 1.8, primaryColor, 'left', true);
                             addArrow(new THREE.Vector3(5.5, 0, 0), new THREE.Vector3(-1, 0, 0), 1.8, primaryColor, 'right', true);
 
-                            // 青（結果として引っ張られる力）：短辺（前後Z方向）への引張・逃げ方向
-                            // 奥側（左ブロック）：奥方向（-Z方向）へ逃げる／引っ張られる
-                            addArrow(new THREE.Vector3(-2.0, 0, -3.5), new THREE.Vector3(0, 0, -1), 1.8, secondaryColor, 'left', false);
-                            // 手前側（右ブロック）：手前方向（+Z方向）へ逃げる／引っ張られる
-                            addArrow(new THREE.Vector3(2.0, 0, 3.5), new THREE.Vector3(0, 0, 1), 1.8, secondaryColor, 'right', false);
+                            addArrow(new THREE.Vector3(-2.0, 0, 3.5), new THREE.Vector3(0, 0, 1), 1.8, secondaryColor, 'left', false);
+                            addArrow(new THREE.Vector3(2.0, 0, -3.5), new THREE.Vector3(0, 0, -1), 1.8, secondaryColor, 'right', false);
                         }
 
                         applyTransformation();
                     }
 
                     function addArrow(origin, dir, length, color, followBlock, isPrimary) {
-                        const arrowHelper = new THREE.ArrowHelper(dir.normalize(), origin, length, color, 0.6, 0.4);
-                        arrowHelper.line.material.linewidth = 8; 
-                        arrowHelper.line.material.needsUpdate = true;
+                        const arrowContainer = new THREE.Group();
+                        
+                        if (isPrimary) {
+                            const arrowHelper = new THREE.ArrowHelper(dir.clone().normalize(), origin, length, color, 0.6, 0.4);
+                            arrowHelper.line.material.linewidth = 8;
+                            arrowContainer.add(arrowHelper);
+                        } else {
+                            const normDir = dir.clone().normalize();
+                            const headLength = 0.4;
+                            const shaftLength = Math.max(0.1, length - headLength);
 
-                        arrowHelper.userData = {
+                            const startPos = origin.clone();
+                            const endPos = origin.clone().add(normDir.clone().multiplyScalar(shaftLength));
+
+                            const geometry = new THREE.BufferGeometry().setFromPoints([startPos, endPos]);
+                            const material = new THREE.LineDashedMaterial({
+                                color: color,
+                                linewidth: 3,
+                                scale: 1,
+                                dashSize: 0.2,
+                                gapSize: 0.15
+                            });
+                            const dashedLine = new THREE.Line(geometry, material);
+                            dashedLine.computeLineDistances();
+                            arrowContainer.add(dashedLine);
+
+                            const coneGeo = new THREE.ConeGeometry(0.18, headLength, 12);
+                            const coneMat = new THREE.MeshBasicMaterial({ color: color });
+                            const cone = new THREE.Mesh(coneGeo, coneMat);
+
+                            const headPos = origin.clone().add(normDir.clone().multiplyScalar(shaftLength + headLength / 2));
+                            cone.position.copy(headPos);
+
+                            const quaternion = new THREE.Quaternion();
+                            quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), normDir);
+                            cone.quaternion.copy(quaternion);
+
+                            arrowContainer.add(cone);
+                        }
+
+                        arrowContainer.userData = {
                             initialOrigin: origin.clone(),
                             followBlock: followBlock,
                             isPrimary: isPrimary
                         };
-                        arrowGroup.add(arrowHelper);
-                        arrows.push(arrowHelper);
+
+                        arrowGroup.add(arrowContainer);
+                        arrows.push(arrowContainer);
                     }
 
                     function onSliderChange(value) {
                         animationProgress = value / 100;
                         applyTransformation();
-                        
-                        const type = document.getElementById('faultType').value;
-                        if (animationProgress > 0) {
-                            document.getElementById('infoText').innerText = explanations[type];
-                        } else {
-                            document.getElementById('infoText').innerText = explanations.initial;
-                        }
                     }
 
                     function applyTransformation() {
@@ -433,13 +483,12 @@ public class FaultSimulation3DGeneratorV11 {
 
                         } else if (type === 'strike-slip') {
                             const amount = p * 1.5;
-                            leftGroup.position.z = -amount * 0.6;
-                            rightGroup.position.z = amount * 0.6;
+                            // Z軸（奥行き・手前）方向のみに完全平行スライドさせ、接触面を密着に保持
+                            leftGroup.position.z = amount * 0.6;
+                            rightGroup.position.z = -amount * 0.6;
                         }
 
-                        // 矢印の位置追従＆変形時表示切り替え
                         arrows.forEach(arrow => {
-                            const initOrg = arrow.userData.initialOrigin;
                             const follow = arrow.userData.followBlock;
                             const isPrimary = arrow.userData.isPrimary;
 
@@ -451,39 +500,18 @@ public class FaultSimulation3DGeneratorV11 {
 
                             if (follow === 'left') {
                                 arrow.position.set(
-                                    initOrg.x + leftGroup.position.x,
-                                    initOrg.y + leftGroup.position.y,
-                                    initOrg.z + leftGroup.position.z
+                                    leftGroup.position.x,
+                                    leftGroup.position.y,
+                                    leftGroup.position.z
                                 );
                             } else if (follow === 'right') {
                                 arrow.position.set(
-                                    initOrg.x + rightGroup.position.x,
-                                    initOrg.y + rightGroup.position.y,
-                                    initOrg.z + rightGroup.position.z
+                                    rightGroup.position.x,
+                                    rightGroup.position.y,
+                                    rightGroup.position.z
                                 );
                             }
                         });
-                    }
-
-                    function playAnimation() {
-                        if (isAnimating) return;
-                        isAnimating = true;
-                        let current = parseFloat(document.getElementById('forceSlider').value);
-                        
-                        function step() {
-                            if (!isAnimating) return;
-                            current += 1.5;
-                            if (current > 100) {
-                                current = 100;
-                                isAnimating = false;
-                            }
-                            document.getElementById('forceSlider').value = current;
-                            onSliderChange(current);
-                            if (isAnimating) {
-                                requestAnimationFrame(step);
-                            }
-                        }
-                        requestAnimationFrame(step);
                     }
 
                     function resetSimulation() {
@@ -523,7 +551,7 @@ public class FaultSimulation3DGeneratorV11 {
 
         try (BufferedWriter writer = new BufferedWriter(new FileWriter(fileName))) {
             writer.write(htmlContent);
-            System.out.println("鉛直矢印厳密調整版3D HTMLファイル（v11）が正常に生成されました: " + fileName);
+            System.out.println("横ずれ密着スライド補正版3D HTMLファイル（v11）が正常に生成されました: " + fileName);
         } catch (IOException e) {
             System.err.println("エラーが発生しました: " + e.getMessage());
         }
