@@ -1,0 +1,531 @@
+import java.io.BufferedWriter;
+import java.io.FileWriter;
+import java.io.IOException;
+
+public class FaultSimulation3DGeneratorV11 {
+    public static void main(String[] args) {
+        String fileName = "fault_simulation_3d_v11.html";
+        String htmlContent = """
+            <!DOCTYPE html>
+            <html lang="ja">
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>3D断層形成シミュレーター v11</title>
+                <style>
+                    body {
+                        margin: 0;
+                        padding: 0;
+                        overflow: hidden;
+                        font-family: 'Helvetica Neue', Arial, "Hiragino Kaku Gothic ProN", sans-serif;
+                        background-color: #1e272e;
+                        color: #f5f6fa;
+                    }
+                    #canvas-container {
+                        width: 100vw;
+                        height: 100vh;
+                        display: block;
+                    }
+                    .ui-panel {
+                        position: absolute;
+                        top: 20px;
+                        left: 20px;
+                        background: rgba(30, 39, 46, 0.95);
+                        padding: 24px;
+                        border-radius: 16px;
+                        box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+                        width: 330px;
+                        backdrop-filter: blur(10px);
+                        border: 1px solid rgba(255,255,255,0.1);
+                        z-index: 10;
+                    }
+                    h1 {
+                        font-size: 18px;
+                        margin: 0 0 15px 0;
+                        color: #00d2d3;
+                        border-bottom: 3px solid #576574;
+                        padding-bottom: 8px;
+                    }
+                    .control-group {
+                        margin-bottom: 18px;
+                    }
+                    label {
+                        display: block;
+                        font-size: 12px;
+                        font-weight: bold;
+                        color: #c8d6e5;
+                        margin-bottom: 8px;
+                    }
+                    select, button {
+                        width: 100%;
+                        padding: 12px;
+                        font-size: 13px;
+                        border-radius: 8px;
+                        border: 1px solid #576574;
+                        background-color: #2f3542;
+                        color: #f5f6fa;
+                        cursor: pointer;
+                        box-sizing: border-box;
+                        margin-bottom: 8px;
+                        transition: all 0.2s;
+                        font-weight: bold;
+                    }
+                    select:hover {
+                        border-color: #00d2d3;
+                    }
+                    button.action-btn {
+                        background-color: #00d2d3;
+                        color: #1e272e;
+                        border: none;
+                    }
+                    button.action-btn:hover {
+                        background-color: #01a3a4;
+                        transform: translateY(-1px);
+                    }
+                    button.reset-btn {
+                        background-color: #576574;
+                        color: #f5f6fa;
+                        border: none;
+                    }
+                    button.reset-btn:hover {
+                        background-color: #8395a7;
+                    }
+                    .slider-container {
+                        margin-top: 10px;
+                        background: #2f3542;
+                        padding: 12px;
+                        border-radius: 8px;
+                    }
+                    input[type="range"] {
+                        width: 100%;
+                        margin: 10px 0;
+                        cursor: pointer;
+                    }
+                    .info-box {
+                        font-size: 12px;
+                        line-height: 1.6;
+                        color: #c8d6e5;
+                        background: #353b48;
+                        padding: 12px;
+                        border-radius: 8px;
+                        border-left: 4px solid #00d2d3;
+                        margin-top: 15px;
+                    }
+                    .legend {
+                        font-size: 11px;
+                        margin-top: 10px;
+                        padding: 8px;
+                        background: #2f3542;
+                        border-radius: 6px;
+                        border: 1px solid #576574;
+                    }
+                    .legend-item {
+                        display: flex;
+                        align-items: center;
+                        margin-bottom: 4px;
+                    }
+                    .legend-color {
+                        width: 12px;
+                        height: 12px;
+                        margin-right: 6px;
+                        border-radius: 2px;
+                    }
+                    .navigation-hint {
+                        position: absolute;
+                        bottom: 20px;
+                        left: 50%;
+                        transform: translateX(-50%);
+                        background: rgba(30, 39, 46, 0.9);
+                        color: white;
+                        padding: 10px 20px;
+                        border-radius: 30px;
+                        font-size: 12px;
+                        pointer-events: none;
+                        z-index: 10;
+                    }
+                </style>
+                <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+                <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+            </head>
+            <body>
+
+                <div class="ui-panel">
+                    <h1>3D 断層形成シミュレーター</h1>
+                    
+                    <div class="control-group">
+                        <label for="faultType">1. 断層の種類と応力（応力軸の設定）</label>
+                        <select id="faultType" onchange="initSimulationState()">
+                            <option value="normal">正断層 (上盤がずり下がる)</option>
+                            <option value="reverse">逆断層 (上盤がのし上がる)</option>
+                            <option value="strike-slip">左横ずれ断層 (水平スライド)</option>
+                        </select>
+                    </div>
+
+                    <div class="control-group">
+                        <label>2. 応力を加えていく（手動操作）</label>
+                        <div class="slider-container">
+                            <span style="font-size:11px; float:left; color:#8395a7;">応力ゼロ</span>
+                            <span style="font-size:11px; float:right; color:#8395a7;">破壊・変位</span>
+                            <input type="range" id="forceSlider" min="0" max="100" value="0" oninput="onSliderChange(this.value)">
+                        </div>
+                    </div>
+
+                    <div class="control-group">
+                        <button class="action-btn" onclick="playAnimation()">応力を加え続ける (自動)</button>
+                        <button class="reset-btn" onclick="resetSimulation()">初期状態に戻す</button>
+                    </div>
+
+                    <div class="info-box" id="infoText">
+                        変形前の均質な地層です。始まりの力（赤矢印）のみが働いています。
+                    </div>
+
+                    <div class="legend">
+                        <div class="legend-item">
+                            <div class="legend-color" style="background: #ff3838;"></div>
+                            <span>始まりの力（主要原因となる応力）</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-color" style="background: #54a0ff;"></div>
+                            <span>変形・破壊に伴い生じる力（変形後表示）</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="navigation-hint">
+                    🖱️ ドラッグでカメラ回転 ｜ 右ドラッグで移動 ｜ スクロールでズーム
+                </div>
+
+                <div id="canvas-container"></div>
+
+                <script>
+                    let scene, camera, renderer, controls;
+                    let leftGroup, rightGroup;
+                    let arrowGroup;
+                    let arrows = [];
+                    
+                    let animationProgress = 0;
+                    let isAnimating = false;
+                    const explanations = {
+                        initial: "変形前の均質な地層です。地殻を歪ませる『始まりの力（赤矢印）』がかかっています。",
+                        normal: "【正断層】水平引張力（赤）を受けて変形し、結果として右ブロックが鉛直下向きに沈降、左ブロックが相対的に上向きへとずれます。",
+                        reverse: "【逆断層】水平圧縮力（赤）を受けて変形し、結果として右ブロックが鉛直上向きに隆起、左ブロックが相対的に下向きへと逃げます。",
+                        'strike-slip': "【左横ずれ断層】長辺方向からの圧縮力（赤）に対し、約45°をなす破断面が形成。結果として短辺方向（青）へ引っ張られるようにスライド逃げします。"
+                    };
+
+                    function init3D() {
+                        const container = document.getElementById('canvas-container');
+                        scene = new THREE.Scene();
+                        scene.background = new THREE.Color(0x1e272e);
+
+                        camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+                        camera.position.set(13, 9, 13);
+
+                        renderer = new THREE.WebGLRenderer({ antialias: true });
+                        renderer.setSize(window.innerWidth, window.innerHeight);
+                        container.appendChild(renderer.domElement);
+
+                        controls = new THREE.OrbitControls(camera, renderer.domElement);
+                        controls.enableDamping = true;
+                        controls.dampingFactor = 0.05;
+                        controls.maxPolarAngle = Math.PI / 2 - 0.05;
+
+                        const gridHelper = new THREE.GridHelper(30, 30, 0x576574, 0x2f3542);
+                        gridHelper.position.y = -3.01;
+                        scene.add(gridHelper);
+
+                        arrowGroup = new THREE.Group();
+                        scene.add(arrowGroup);
+
+                        buildStrata();
+                        updateArrows();
+
+                        window.addEventListener('resize', onWindowResize);
+                        animate();
+                    }
+
+                    function buildStrata() {
+                        if (leftGroup) scene.remove(leftGroup);
+                        if (rightGroup) scene.remove(rightGroup);
+
+                        leftGroup = new THREE.Group();
+                        rightGroup = new THREE.Group();
+
+                        const type = document.getElementById('faultType').value;
+                        const layerColors = [0xffffff, 0x5c4033, 0xffffff];
+                        const layerHeight = 1.3;
+                        const depth = 5.0;
+                        const slantZOffset = (type === 'strike-slip') ? 0.8 : 0.0;
+                        
+                        const topX = (type === 'strike-slip') ? 0.0 : 0.5;
+                        const botX = (type === 'strike-slip') ? 0.0 : -1.8;
+
+                        layerColors.forEach((color, i) => {
+                            const mat = new THREE.MeshBasicMaterial({ 
+                                color: color, 
+                                side: THREE.DoubleSide
+                            });
+
+                            const yTop = 2.0 - (i * layerHeight);
+                            const yBot = yTop - layerHeight;
+
+                            const calcX = (y) => {
+                                if (type === 'strike-slip') return 0;
+                                const t = (y - (-2)) / 4; 
+                                return botX + (topX - botX) * t;
+                            };
+
+                            const xTopSplit = calcX(yTop);
+                            const xBotSplit = calcX(yBot);
+
+                            const zFront = depth / 2;
+                            const zBack = -depth / 2;
+
+                            const xTopF = xTopSplit + slantZOffset;
+                            const xBotF = xBotSplit + slantZOffset;
+                            const xTopB = xTopSplit - slantZOffset;
+                            const xBotB = xBotSplit - slantZOffset;
+
+                            // 左側ブロック
+                            const leftGeom = new THREE.BufferGeometry();
+                            const vertices = new Float32Array([
+                                -4, yTop, zFront,   xTopF, yTop, zFront,   xBotF, yBot, zFront,
+                                -4, yTop, zFront,   xBotF, yBot, zFront,   -4, yBot, zFront,
+                                -4, yTop, zBack,    xBotB, yBot, zBack,    xTopB, yTop, zBack,
+                                -4, yTop, zBack,    -4, yBot, zBack,       xBotB, yBot, zBack,
+                                -4, yTop, zFront,   -4, yTop, zBack,       xTopB, yTop, zBack,
+                                -4, yTop, zFront,   xTopB, yTop, zBack,    xTopF, yTop, zFront,
+                                -4, yBot, zFront,   xBotB, yBot, zBack,    -4, yBot, zBack,
+                                -4, yBot, zFront,   xBotF, yBot, zFront,   xBotB, yBot, zBack,
+                                -4, yTop, zFront,   -4, yBot, zBack,       -4, yTop, zBack,
+                                -4, yTop, zFront,   -4, yBot, zFront,      -4, yBot, zBack,
+                                xTopF, yTop, zFront, xTopB, yTop, zBack,   xBotB, yBot, zBack,
+                                xTopF, yTop, zFront, xBotB, yBot, zBack,   xBotF, yBot, zFront
+                            ]);
+                            leftGeom.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
+                            leftGeom.computeVertexNormals();
+                            const leftMesh = new THREE.Mesh(leftGeom, mat);
+                            leftGroup.add(leftMesh);
+
+                            // 右側ブロック
+                            const rightGeom = new THREE.BufferGeometry();
+                            const rVertices = new Float32Array([
+                                xTopF, yTop, zFront,   4, yTop, zFront,   4, yBot, zFront,
+                                xTopF, yTop, zFront,   4, yBot, zFront,   xBotF, yBot, zFront,
+                                xTopB, yTop, zBack,    4, yBot, zBack,    4, yTop, zBack,
+                                xTopB, yTop, zBack,    xBotB, yBot, zBack, 4, yBot, zBack,
+                                xTopF, yTop, zFront,   xTopB, yTop, zBack, 4, yTop, zBack,
+                                xTopF, yTop, zFront,   4, yTop, zBack,    4, yTop, zFront,
+                                xBotF, yBot, zFront,   4, yBot, zBack,    xBotB, yBot, zBack,
+                                xBotF, yBot, zFront,   4, yBot, zFront,   4, yBot, zBack,
+                                4, yTop, zFront,       4, yTop, zBack,    4, yBot, zBack,
+                                4, yTop, zFront,       4, yBot, zBack,    4, yBot, zFront,
+                                xTopF, yTop, zFront,   xBotB, yBot, zBack, xTopB, yTop, zBack,
+                                xTopF, yTop, zFront,   xBotF, yBot, zFront, xBotB, yBot, zBack
+                            ]);
+                            rightGeom.setAttribute('position', new THREE.BufferAttribute(rVertices, 3));
+                            rightGeom.computeVertexNormals();
+                            const rightMesh = new THREE.Mesh(rightGeom, mat);
+                            rightGroup.add(rightMesh);
+                        });
+
+                        scene.add(leftGroup);
+                        scene.add(rightGroup);
+                    }
+
+                    function updateArrows() {
+                        while(arrows.length > 0) {
+                            const arr = arrows.pop();
+                            arrowGroup.remove(arr);
+                        }
+
+                        const type = document.getElementById('faultType').value;
+                        const primaryColor = 0xff3838;   // 始まりの力：赤
+                        const secondaryColor = 0x54a0ff; // 二次的な力：青
+
+                        if (type === 'normal') {
+                            // 【正断層】
+                            addArrow(new THREE.Vector3(-5.2, 0, 0), new THREE.Vector3(-1, 0, 0), 1.8, primaryColor, 'left', true);
+                            addArrow(new THREE.Vector3(5.2, 0, 0), new THREE.Vector3(1, 0, 0), 1.8, primaryColor, 'right', true);
+
+                            addArrow(new THREE.Vector3(-2.2, 3.8, 0), new THREE.Vector3(0, -1, 0), 1.8, secondaryColor, 'left', false);
+                            addArrow(new THREE.Vector3(2.2, -3.7, 0), new THREE.Vector3(0, 1, 0), 1.8, secondaryColor, 'right', false);
+
+                        } else if (type === 'reverse') {
+                            // 【逆断層】
+                            addArrow(new THREE.Vector3(-5.5, 0, 0), new THREE.Vector3(1, 0, 0), 1.8, primaryColor, 'left', true);
+                            addArrow(new THREE.Vector3(5.5, 0, 0), new THREE.Vector3(-1, 0, 0), 1.8, primaryColor, 'right', true);
+
+                            addArrow(new THREE.Vector3(-2.2, 2.0, 0), new THREE.Vector3(0, 1, 0), 1.8, secondaryColor, 'left', false);
+                            addArrow(new THREE.Vector3(2.2, -1.9, 0), new THREE.Vector3(0, -1, 0), 1.8, secondaryColor, 'right', false);
+
+                        } else if (type === 'strike-slip') {
+                            // 【左横ずれ断層】
+                            // 赤（始まりの力）：長辺方向（左右）から押す圧縮力（最大主応力）
+                            addArrow(new THREE.Vector3(-5.5, 0, 0), new THREE.Vector3(1, 0, 0), 1.8, primaryColor, 'left', true);
+                            addArrow(new THREE.Vector3(5.5, 0, 0), new THREE.Vector3(-1, 0, 0), 1.8, primaryColor, 'right', true);
+
+                            // 青（結果として引っ張られる力）：短辺（前後Z方向）への引張・逃げ方向
+                            // 奥側（左ブロック）：奥方向（-Z方向）へ逃げる／引っ張られる
+                            addArrow(new THREE.Vector3(-2.0, 0, -3.5), new THREE.Vector3(0, 0, -1), 1.8, secondaryColor, 'left', false);
+                            // 手前側（右ブロック）：手前方向（+Z方向）へ逃げる／引っ張られる
+                            addArrow(new THREE.Vector3(2.0, 0, 3.5), new THREE.Vector3(0, 0, 1), 1.8, secondaryColor, 'right', false);
+                        }
+
+                        applyTransformation();
+                    }
+
+                    function addArrow(origin, dir, length, color, followBlock, isPrimary) {
+                        const arrowHelper = new THREE.ArrowHelper(dir.normalize(), origin, length, color, 0.6, 0.4);
+                        arrowHelper.line.material.linewidth = 8; 
+                        arrowHelper.line.material.needsUpdate = true;
+
+                        arrowHelper.userData = {
+                            initialOrigin: origin.clone(),
+                            followBlock: followBlock,
+                            isPrimary: isPrimary
+                        };
+                        arrowGroup.add(arrowHelper);
+                        arrows.push(arrowHelper);
+                    }
+
+                    function onSliderChange(value) {
+                        animationProgress = value / 100;
+                        applyTransformation();
+                        
+                        const type = document.getElementById('faultType').value;
+                        if (animationProgress > 0) {
+                            document.getElementById('infoText').innerText = explanations[type];
+                        } else {
+                            document.getElementById('infoText').innerText = explanations.initial;
+                        }
+                    }
+
+                    function applyTransformation() {
+                        const type = document.getElementById('faultType').value;
+                        const p = animationProgress;
+
+                        leftGroup.position.set(0, 0, 0);
+                        rightGroup.position.set(0, 0, 0);
+
+                        const slopeLen = Math.sqrt(2.3 * 2.3 + 4.0 * 4.0);
+                        const slideDirX = 2.3 / slopeLen;
+                        const slideDirY = 4.0 / slopeLen;
+
+                        if (type === 'normal') {
+                            const amount = p * 1.5;
+                            const halfAmount = amount / 2;
+                            
+                            rightGroup.position.x = halfAmount * slideDirX;
+                            rightGroup.position.y = halfAmount * slideDirY;
+
+                            leftGroup.position.x = -halfAmount * slideDirX;
+                            leftGroup.position.y = -halfAmount * slideDirY;
+
+                        } else if (type === 'reverse') {
+                            const amount = p * 1.5;
+                            const halfAmount = amount / 2;
+                            
+                            rightGroup.position.x = -halfAmount * slideDirX;
+                            rightGroup.position.y = -halfAmount * slideDirY;
+
+                            leftGroup.position.x = halfAmount * slideDirX;
+                            leftGroup.position.y = halfAmount * slideDirY;
+
+                        } else if (type === 'strike-slip') {
+                            const amount = p * 1.5;
+                            leftGroup.position.z = -amount * 0.6;
+                            rightGroup.position.z = amount * 0.6;
+                        }
+
+                        // 矢印の位置追従＆変形時表示切り替え
+                        arrows.forEach(arrow => {
+                            const initOrg = arrow.userData.initialOrigin;
+                            const follow = arrow.userData.followBlock;
+                            const isPrimary = arrow.userData.isPrimary;
+
+                            if (!isPrimary && p === 0) {
+                                arrow.visible = false;
+                            } else {
+                                arrow.visible = true;
+                            }
+
+                            if (follow === 'left') {
+                                arrow.position.set(
+                                    initOrg.x + leftGroup.position.x,
+                                    initOrg.y + leftGroup.position.y,
+                                    initOrg.z + leftGroup.position.z
+                                );
+                            } else if (follow === 'right') {
+                                arrow.position.set(
+                                    initOrg.x + rightGroup.position.x,
+                                    initOrg.y + rightGroup.position.y,
+                                    initOrg.z + rightGroup.position.z
+                                );
+                            }
+                        });
+                    }
+
+                    function playAnimation() {
+                        if (isAnimating) return;
+                        isAnimating = true;
+                        let current = parseFloat(document.getElementById('forceSlider').value);
+                        
+                        function step() {
+                            if (!isAnimating) return;
+                            current += 1.5;
+                            if (current > 100) {
+                                current = 100;
+                                isAnimating = false;
+                            }
+                            document.getElementById('forceSlider').value = current;
+                            onSliderChange(current);
+                            if (isAnimating) {
+                                requestAnimationFrame(step);
+                            }
+                        }
+                        requestAnimationFrame(step);
+                    }
+
+                    function resetSimulation() {
+                        isAnimating = false;
+                        document.getElementById('forceSlider').value = 0;
+                        onSliderChange(0);
+                    }
+
+                    function initSimulationState() {
+                        resetSimulation();
+                        buildStrata(); 
+                        updateArrows(); 
+                    }
+
+                    function animate() {
+                        requestAnimationFrame(animate);
+                        controls.update();
+                        renderer.render(scene, camera);
+                    }
+
+                    function onWindowResize() {
+                        camera.aspect = window.innerWidth / window.innerHeight;
+                        camera.updateProjectionMatrix();
+                        renderer.setSize(window.innerWidth, window.innerHeight);
+                    }
+
+                    window.onload = function() {
+                        init3D();
+                        initSimulationState();
+                    };
+                </script>
+            </body>
+            </html>
+            """;
+
+        htmlContent = htmlContent.replace("() -> {", "function() {");
+
+        try (BufferedWriter writer = new BufferedWriter(new FileWriter(fileName))) {
+            writer.write(htmlContent);
+            System.out.println("鉛直矢印厳密調整版3D HTMLファイル（v11）が正常に生成されました: " + fileName);
+        } catch (IOException e) {
+            System.err.println("エラーが発生しました: " + e.getMessage());
+        }
+    }
+}
