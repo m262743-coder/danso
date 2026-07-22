@@ -1,3 +1,4 @@
+
             <!DOCTYPE html>
             <html lang="ja">
             <head>
@@ -548,12 +549,6 @@
             """;
 
         htmlContent = htmlContent.replace("() -> {", "function() {");
-
-        try (BufferedWriter writer = new BufferedWriter(new FileWriter(fileName))) {
-            writer.write(htmlContent);
-            System.out.println("レスポンシブUI最適化版3D HTMLファイル（v11）が正常に生成されました: " + fileName);
-        } catch (IOException e) {
-            System.err.println("エラーが発生しました: " + e.getMessage());
         }
     }
 }
